@@ -26,9 +26,21 @@ const envFeatures = Object.entries(process.env)
 const allFeatures = [...new Set([...DEFAULT_FEATURES, ...envFeatures])];
 const featureArgs = allFeatures.flatMap((name) => ["--feature", name]);
 
+// Extract debug/inspect args from user input - these go to the child bun process
+const debugArgs = process.argv.slice(2).filter(
+	(a) => a.startsWith("--inspect") || a.startsWith("--debug")
+);
+
+// Filter out debug args from args passed to cli.tsx
+const userArgs = process.argv.slice(2).filter(
+	(a) => !a.startsWith("--inspect") && !a.startsWith("--debug")
+);
+
 const result = Bun.spawnSync(
-    ["bun", "run", ...defineArgs, ...featureArgs, "src/entrypoints/cli.tsx", ...process.argv.slice(2)],
-    { stdio: ["inherit", "inherit", "inherit"] },
+	["bun", "run", ...defineArgs, ...featureArgs, ...debugArgs, "src/entrypoints/cli.tsx", ...userArgs],
+    { 
+        stdio: ["inherit", "inherit", "inherit"]
+     },
 );
 
 process.exit(result.exitCode ?? 0);

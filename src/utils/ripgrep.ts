@@ -7,7 +7,7 @@ import { logEvent } from 'src/services/analytics/index.js'
 import { fileURLToPath } from 'url'
 import { isInBundledMode } from './bundledMode.js'
 import { logForDebugging } from './debug.js'
-import { isEnvDefinedFalsy } from './envUtils.js'
+import { isEnvTruthy } from './envUtils.js'
 import { execFileNoThrow } from './execFileNoThrow.js'
 import { findExecutable } from './findExecutable.js'
 import { logError } from './log.js'
@@ -29,12 +29,15 @@ type RipgrepConfig = {
 }
 
 const getRipgrepConfig = memoize((): RipgrepConfig => {
-  const userWantsSystemRipgrep = isEnvDefinedFalsy(
-    process.env.USE_BUILTIN_RIPGREP,
-  )
+  // 支持 USE_SYSTEM_RIPGREP=true 使用系统 ripgrep（语义清晰）
+  // 旧变量 USE_BUILTIN_RIPGREP=false 保持兼容
+  const useSystem =
+    isEnvTruthy(process.env.USE_SYSTEM_RIPGREP) ||
+    (process.env.USE_BUILTIN_RIPGREP !== undefined &&
+      !isEnvTruthy(process.env.USE_BUILTIN_RIPGREP))
 
   // Try system ripgrep if user wants it
-  if (userWantsSystemRipgrep) {
+  if (useSystem) {
     const { cmd: systemPath } = findExecutable('rg', [])
     if (systemPath !== 'rg') {
       // SECURITY: Use command name 'rg' instead of systemPath to prevent PATH hijacking

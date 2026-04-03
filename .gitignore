@@ -5,6 +5,5 @@ coverage
 .env
 *.log
 .idea
-.vscode
 *.suo
 *.lock
