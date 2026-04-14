@@ -8,9 +8,12 @@ import { FallbackTriggeredError } from './services/api/withRetry.js'
 import {
   calculateTokenWarningState,
   isAutoCompactEnabled,
+  MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES,
   type AutoCompactTrackingState,
 } from './services/compact/autoCompact.js'
 import { buildPostCompactMessages } from './services/compact/compact.js'
+import { suppressCompactWarning } from './services/compact/compactWarningState.js'
+import { runPostCompactCleanup } from './services/compact/postCompactCleanup.js'
 /* eslint-disable @typescript-eslint/no-require-imports */
 const reactiveCompact = feature('REACTIVE_COMPACT')
   ? (require('./services/compact/reactiveCompact.js') as typeof import('./services/compact/reactiveCompact.js'))
@@ -53,6 +56,7 @@ import {
   createToolUseSummaryMessage,
   createMicrocompactBoundaryMessage,
   stripSignatureBlocks,
+  createCompactBoundaryMessage,
 } from './utils/messages.js'
 import { generateToolUseSummary } from './services/toolUseSummary/toolUseSummaryGenerator.js'
 import { prependUserContext, appendSystemContext } from './utils/api.js'
@@ -108,6 +112,7 @@ import {
   getTurnOutputTokens,
   incrementBudgetContinuationCount,
   getSessionId,
+  markPostCompaction,
 } from './bootstrap/state.js'
 import { createBudgetTracker, checkTokenBudget } from './query/tokenBudget.js'
 import { count } from './utils/array.js'
@@ -217,6 +222,36 @@ type State = {
   // Why the previous iteration continued. Undefined on first iteration.
   // Lets tests assert recovery paths fired without inspecting message contents.
   transition: Continue | undefined
+}
+
+/**
+ * 强制截断消息数组，保留完整的 user → assistant 对。
+ *
+ * 算法：
+ * 1. 按 turn 分组：每个 `type === 'user'` 开始一个新 turn
+ * 2. 每个 turn 必须有至少一个 `type === 'assistant'` 才算完整
+ * 3. 保留后半部分的完整 turn，丢弃边界上不完整的 turn
+ *
+ * 这样 `user → assistant → tool_result (type:'user')` 链永远不会被切断。
+ */
+function truncateMessagesAtTurnBoundary(messages: Message[]): Message[] {
+  if (messages.length === 0) return messages
+
+  const turns: Message[][] = []
+  let currentTurn: Message[] = []
+
+  for (const msg of messages) {
+    if (msg.type === 'user') {
+      if (currentTurn.length > 0) turns.push(currentTurn)
+      currentTurn = [msg]
+    } else {
+      currentTurn.push(msg)
+    }
+  }
+  if (currentTurn.length > 0) turns.push(currentTurn)
+
+  const midpoint = Math.ceil(turns.length / 2)
+  return turns.slice(midpoint).flat()
 }
 
 export async function* query(
@@ -576,9 +611,41 @@ async function* queryLoop(
     } else if (consecutiveFailures !== undefined) {
       // Autocompact failed — propagate failure count so the circuit breaker
       // can stop retrying on the next iteration.
-      tracking = {
-        ...(tracking ?? { compacted: false, turnId: '', turnCounter: 0 }),
-        consecutiveFailures,
+      if (consecutiveFailures >= MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES) {
+        // Circuit breaker tripped: forcibly truncate history so the session can
+        // continue. Truncates at turn boundaries to keep user↔assistant↔tool_result
+        // pairs intact.
+        const preTruncTokens = tokenCountWithEstimation(messagesForQuery)
+        let truncated = truncateMessagesAtTurnBoundary(messagesForQuery)
+
+        // Guard: truncateMessagesAtTurnBoundary returns [] when there is only
+        // one turn. Preserve at least the last message so the session never
+        // continues with zero context.
+        if (truncated.length === 0) {
+          truncated = messagesForQuery.slice(-1)
+        }
+
+        const boundaryMsg = createCompactBoundaryMessage('auto', preTruncTokens)
+        yield boundaryMsg
+
+        messagesForQuery = truncated
+
+        // Reset failure count so we don't re-trigger every subsequent turn.
+        // Token count has dropped significantly — let normal autocompact try again.
+        tracking = {
+          ...(tracking ?? { compacted: false, turnId: '', turnCounter: 0 }),
+          consecutiveFailures: 0,
+        }
+
+        // Mirror the post-compact cleanup that compactConversation normally runs.
+        markPostCompaction()
+        suppressCompactWarning()
+        runPostCompactCleanup()
+      } else {
+        tracking = {
+          ...(tracking ?? { compacted: false, turnId: '', turnCounter: 0 }),
+          consecutiveFailures,
+        }
       }
     }
 

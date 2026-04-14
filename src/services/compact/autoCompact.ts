@@ -67,7 +67,7 @@ export const MANUAL_COMPACT_BUFFER_TOKENS = 3_000
 // Stop trying autocompact after this many consecutive failures.
 // BQ 2026-03-10: 1,279 sessions had 50+ consecutive failures (up to 3,272)
 // in a single session, wasting ~250K API calls/day globally.
-const MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES = 3
+export const MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES = 3
 
 export function getAutoCompactThreshold(model: string): number {
   const effectiveContextWindow = getEffectiveContextWindowSize(model)
@@ -257,11 +257,13 @@ export async function autoCompactIfNeeded(
   // Circuit breaker: stop retrying after N consecutive failures.
   // Without this, sessions where context is irrecoverably over the limit
   // hammer the API with doomed compaction attempts on every turn.
+  // Return consecutiveFailures so the caller's circuit breaker (in query.ts)
+  // can fire and forcibly truncate history instead of skipping forever.
   if (
     tracking?.consecutiveFailures !== undefined &&
     tracking.consecutiveFailures >= MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES
   ) {
-    return { wasCompacted: false }
+    return { wasCompacted: false, consecutiveFailures: tracking.consecutiveFailures }
   }
 
   const model = toolUseContext.options.mainLoopModel
