@@ -25,8 +25,13 @@ import type { Message } from '../../types/message.js'
 import { hasExactErrorMessage } from '../../utils/errors.js'
 import { executePreCompactHooks } from '../../utils/hooks.js'
 import { logError } from '../../utils/log.js'
-import { getMessagesAfterCompactBoundary } from '../../utils/messages.js'
+import {
+  createCompactBoundaryMessage,
+  getMessagesAfterCompactBoundary,
+  truncateMessagesAtTurnBoundary,
+} from '../../utils/messages.js'
 import { getUpgradeMessage } from '../../utils/model/contextWindowUpgradeCheck.js'
+import { tokenCountWithEstimation } from '../../utils/tokens.js'
 import {
   buildEffectiveSystemPrompt,
   type SystemPrompt,
@@ -129,7 +134,36 @@ export const call: LocalCommandCall = async (args, context) => {
     } else if (hasExactErrorMessage(error, ERROR_MESSAGE_NOT_ENOUGH_MESSAGES)) {
       throw new Error(ERROR_MESSAGE_NOT_ENOUGH_MESSAGES)
     } else if (hasExactErrorMessage(error, ERROR_MESSAGE_INCOMPLETE_RESPONSE)) {
-      throw new Error(ERROR_MESSAGE_INCOMPLETE_RESPONSE)
+      // Compaction failed — fall back to the same half-cut truncation that
+      // auto-compact's circuit breaker uses. Keeps the session alive instead of
+      // leaving it stuck with no way forward except /clear.
+      const preTokens = tokenCountWithEstimation(messages)
+      let truncated = truncateMessagesAtTurnBoundary(messages)
+      if (truncated.length === 0) {
+        truncated = messages.slice(-1)
+      }
+      const boundaryMarker = createCompactBoundaryMessage(
+        'manual',
+        preTokens,
+        undefined,
+        undefined,
+        messages.length - truncated.length,
+      )
+      markPostCompaction()
+      suppressCompactWarning()
+      runPostCompactCleanup()
+      getUserContext.cache.clear?.()
+
+      return {
+        type: 'compact',
+        compactionResult: {
+          boundaryMarker,
+          summaryMessages: [],
+          attachments: [],
+          hookResults: [],
+        } satisfies CompactionResult,
+        displayText: buildDisplayText(context),
+      }
     } else {
       logError(error)
       throw new Error(`Error during compaction: ${error}`)

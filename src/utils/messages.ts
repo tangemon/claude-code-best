@@ -5570,3 +5570,28 @@ export function wrapCommandText(
       return `The user sent a new message while you were working:\n${raw}\n\nIMPORTANT: After completing your current task, you MUST address the user's message above. Do not ignore it.`
   }
 }
+
+/**
+ * Truncate messages to the second half of turns (by user message count).
+ * Keeps turn boundaries intact — user/assistant/tool_result pairs are preserved.
+ * Used as a fallback when compaction fails.
+ */
+export function truncateMessagesAtTurnBoundary(messages: Message[]): Message[] {
+  if (messages.length === 0) return messages
+
+  const turns: Message[][] = []
+  let currentTurn: Message[] = []
+
+  for (const msg of messages) {
+    if (msg.type === 'user') {
+      if (currentTurn.length > 0) turns.push(currentTurn)
+      currentTurn = [msg]
+    } else {
+      currentTurn.push(msg)
+    }
+  }
+  if (currentTurn.length > 0) turns.push(currentTurn)
+
+  const midpoint = Math.ceil(turns.length / 2)
+  return turns.slice(midpoint).flat()
+}
