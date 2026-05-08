@@ -277,6 +277,9 @@ export async function* query(
   const consumedCommandUuids: string[] = []
   const consumedAutonomyCommands: QueuedCommand[] = []
 
+  // Get deps for query-level functions
+  const { logError: logErrorFn } = params.deps ?? productionDeps()
+
   // Create Langfuse trace for this query turn (no-op if not configured).
   // When called as a sub-agent, langfuseTrace is already set by runAgent()
   // — reuse it instead of creating an independent trace.
@@ -331,7 +334,7 @@ export async function* query(
           enqueue(command)
         }
       })
-      .catch(logError)
+      .catch(logErrorFn)
 
     // Only end the trace if we created it — sub-agents own their traces
     if (ownsTrace) {
@@ -405,6 +408,16 @@ async function* queryLoop(
     skipCacheWrite,
   } = params
   const deps = params.deps ?? productionDeps()
+
+  // Destructure deps for convenience
+  const {
+    runTools: runToolsFn,
+    handleStopHooks: handleStopHooksFn,
+    executeStopFailureHooks: executeStopFailureHooksFn,
+    executePostSamplingHooks: executePostSamplingHooksFn,
+    logEvent: logEventFn,
+    logError: logErrorFn,
+  } = deps
 
   // Mutable cross-iteration state. The loop body destructures this at the top
   // of each iteration so reads stay bare-name (`messages`, `toolUseContext`).
@@ -544,7 +557,7 @@ async function* queryLoop(
             void recordContentReplacement(
               records,
               toolUseContext.agentId,
-            ).catch(logError)
+            ).catch(logErrorFn)
         : undefined,
       new Set(
         toolUseContext.options.tools
@@ -645,7 +658,7 @@ async function* queryLoop(
         compactionUsage,
       } = compactionResult
 
-      logEvent('tengu_auto_compact_succeeded', {
+      logEventFn('tengu_auto_compact_succeeded', {
         originalMessageCount: messages.length,
         compactedMessageCount:
           compactionResult.summaryMessages.length +
@@ -929,7 +942,7 @@ async function* queryLoop(
               for (const msg of assistantMessages) {
                 yield { type: 'tombstone' as const, message: msg }
               }
-              logEvent('tengu_orphaned_messages_tombstoned', {
+              logEventFn('tengu_orphaned_messages_tombstoned', {
                 orphanedMessageCount: assistantMessages.length,
                 queryChainId: queryChainIdForAnalytics,
                 queryDepth: queryTracking.depth,
@@ -1159,7 +1172,7 @@ async function* queryLoop(
             }
 
             // Log the fallback event
-            logEvent('tengu_model_fallback_triggered', {
+            logEventFn('tengu_model_fallback_triggered', {
               original_model:
                 innerError.originalModel as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
               fallback_model:
@@ -1183,10 +1196,10 @@ async function* queryLoop(
         }
       }
     } catch (error) {
-      logError(error)
+      logErrorFn(error)
       const errorMessage =
         error instanceof Error ? error.message : String(error)
-      logEvent('tengu_query_error', {
+      logEventFn('tengu_query_error', {
         assistantMessages: assistantMessages.length,
         toolUses: assistantMessages.flatMap(_ =>
           (Array.isArray(_.message?.content)
@@ -1231,7 +1244,7 @@ async function* queryLoop(
 
     // Execute post-sampling hooks after model response is complete
     if (assistantMessages.length > 0) {
-      void executePostSamplingHooks(
+      void executePostSamplingHooksFn(
         messagesForQuery.concat(assistantMessages),
         systemPrompt,
         userContext,
@@ -1404,14 +1417,14 @@ async function* queryLoop(
         // on prompt-too-long creates a death spiral: error → hook blocking
         // → retry → error → … (the hook injects more tokens each cycle).
         yield lastMessage!
-        void executeStopFailureHooks(lastMessage!, toolUseContext)
+        void executeStopFailureHooksFn(lastMessage!, toolUseContext)
         return { reason: isWithheldMedia ? 'image_error' : 'prompt_too_long' }
       } else if (feature('CONTEXT_COLLAPSE') && isWithheld413) {
         // reactiveCompact compiled out but contextCollapse withheld and
         // couldn't recover (staged queue empty/stale). Surface. Same
         // early-return rationale — don't fall through to stop hooks.
         yield lastMessage
-        void executeStopFailureHooks(lastMessage, toolUseContext)
+        void executeStopFailureHooksFn(lastMessage, toolUseContext)
         return { reason: 'prompt_too_long' }
       }
 
@@ -1434,7 +1447,7 @@ async function* queryLoop(
           maxOutputTokensOverride === undefined &&
           !process.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS
         ) {
-          logEvent('tengu_max_tokens_escalate', {
+          logEventFn('tengu_max_tokens_escalate', {
             escalatedTo: ESCALATED_MAX_TOKENS,
           })
           const next: State = {
@@ -1493,14 +1506,14 @@ async function* queryLoop(
       // real response — hooks evaluating it create a death spiral:
       // error → hook blocking → retry → error → …
       if (lastMessage?.isApiErrorMessage) {
-        void executeStopFailureHooks(lastMessage, toolUseContext)
+        void executeStopFailureHooksFn(lastMessage, toolUseContext)
         return {
           reason: 'model_error',
           error: lastMessage.error ?? lastMessage.apiError ?? 'api_error',
         }
       }
 
-      const stopHookResult = yield* handleStopHooks(
+      const stopHookResult = yield* handleStopHooksFn(
         messagesForQuery,
         assistantMessages,
         systemPrompt,
@@ -1582,7 +1595,7 @@ async function* queryLoop(
               `Token budget early stop: diminishing returns at ${decision.completionEvent.pct}%`,
             )
           }
-          logEvent('tengu_token_budget_completed', {
+          logEventFn('tengu_token_budget_completed', {
             ...decision.completionEvent,
             queryChainId: queryChainIdForAnalytics,
             queryDepth: queryTracking.depth,
@@ -1599,13 +1612,13 @@ async function* queryLoop(
     queryCheckpoint('query_tool_execution_start')
 
     if (streamingToolExecutor) {
-      logEvent('tengu_streaming_tool_execution_used', {
+      logEventFn('tengu_streaming_tool_execution_used', {
         tool_count: toolUseBlocks.length,
         queryChainId: queryChainIdForAnalytics,
         queryDepth: queryTracking.depth,
       })
     } else {
-      logEvent('tengu_streaming_tool_execution_not_used', {
+      logEventFn('tengu_streaming_tool_execution_not_used', {
         tool_count: toolUseBlocks.length,
         queryChainId: queryChainIdForAnalytics,
         queryDepth: queryTracking.depth,
@@ -1614,7 +1627,7 @@ async function* queryLoop(
 
     const toolUpdates = streamingToolExecutor
       ? streamingToolExecutor.getRemainingResults()
-      : runTools(toolUseBlocks, assistantMessages, canUseTool, toolUseContext)
+      : runToolsFn(toolUseBlocks, assistantMessages, canUseTool, toolUseContext)
 
     for await (const update of toolUpdates) {
       if (update.message) {
@@ -1762,7 +1775,7 @@ async function* queryLoop(
 
     if (tracking?.compacted) {
       tracking.turnCounter++
-      logEvent('tengu_post_autocompact_turn', {
+      logEventFn('tengu_post_autocompact_turn', {
         turnId:
           tracking.turnId as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
         turnCounter: tracking.turnCounter,
@@ -1776,7 +1789,7 @@ async function* queryLoop(
     // will error if we interleave tool_result messages with regular user messages.
 
     // Instrumentation: Track message count before attachments
-    logEvent('tengu_query_before_attachments', {
+    logEventFn('tengu_query_before_attachments', {
       messagesForQueryCount: messagesForQuery.length,
       assistantMessagesCount: assistantMessages.length,
       toolResultsCount: toolResults.length,
@@ -1911,7 +1924,7 @@ async function* queryLoop(
         tr.type === 'attachment' && tr.attachment.type === 'edited_text_file',
     )
 
-    logEvent('tengu_query_after_attachments', {
+    logEventFn('tengu_query_after_attachments', {
       totalToolResultsCount: toolResults.length,
       fileChangeAttachmentCount,
       queryChainId: queryChainIdForAnalytics,
