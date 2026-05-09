@@ -1,15 +1,16 @@
 /**
  * Unit tests for phases/init.ts
  */
-import { describe, test, expect, vi, beforeEach } from 'vitest'
+import { describe, test, expect, beforeEach } from 'bun:test'
+import { mock, type Mock } from 'bun:test'
 import type { QueryParams } from '../../../types.js'
 
 // Mock productionDeps to avoid circular dependency issues
-vi.mock('../../../deps.js', () => ({
+mock.module('../../../deps.js', () => ({
   productionDeps: () => ({
     callModel: async function* () {},
     microcompact: async (messages: any[]) => ({ messages }),
-    autocompact: async () => ({ compactionResult: undefined, consecutiveFailures: 0 }),
+    autocompact: async () => ({ wasCompacted: false, compactionResult: undefined, consecutiveFailures: 0 }),
     uuid: () => 'test-uuid',
     runTools: async function* () {},
     generateToolUseSummary: async () => null,
@@ -34,7 +35,7 @@ vi.mock('../../../deps.js', () => ({
 describe('initQueryLoop', () => {
   const baseParams: QueryParams = {
     messages: [],
-    systemPrompt: { system: [] },
+    systemPrompt: [] as any,
     userContext: {},
     systemContext: {},
     canUseTool: async () => ({ behavior: 'allow' as const, updatedInput: undefined }),
@@ -49,14 +50,14 @@ describe('initQueryLoop', () => {
         mcpClients: [],
         mcpResources: {},
         isNonInteractiveSession: true,
-        agentDefinitions: { activeAgents: [], allowedAgentTypes: [] },
+        agentDefinitions: { activeAgents: [], allAgents: [], allowedAgentTypes: [] },
       },
       abortController: new AbortController(),
-      readFileState: new Map(),
+      readFileState: { cache: new Map(), max: 100, maxSize: 0, calculatedSize: 0 } as any,
       getAppState: () => ({
         toolPermissionContext: { mode: 'bypass' as const, toolPermissions: new Map() },
         fastMode: false,
-        mcp: { tools: [], clients: [] },
+        mcp: { tools: [], clients: [], commands: [], resources: {}, pluginReconnectKey: 0 },
         effortValue: undefined,
         advisorModel: undefined,
         sessionHooks: new Map(),

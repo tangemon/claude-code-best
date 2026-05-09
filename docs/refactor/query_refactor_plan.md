@@ -113,10 +113,17 @@ type QueryDeps = {
 ### 📊 测试覆盖
 
 ```
-测试结果: 55 pass, 0 fail
+测试结果: 93 pass, 0 fail
 ├── integration.test.ts: 14 tests
 ├── unit/tokenBudget.test.ts: 19 tests
-└── unit/transitions.test.ts: 22 tests
+├── unit/transitions.test.ts: 22 tests
+├── unit/deps.test.ts: 8 tests
+├── unit/phases/init.test.ts: 5 tests
+├── unit/phases/preprocess.test.ts: 5 tests
+├── unit/phases/autocompact.test.ts: 5 tests
+├── unit/phases/streaming.test.ts: 5 tests
+├── unit/phases/toolExecution.test.ts: 5 tests
+└── unit/phases/recovery.test.ts: 5 tests
 ```
 
 ## 待完成
@@ -228,7 +235,7 @@ src/query/
          ↓
 6. ✅ 精简 query.ts 主入口
          ↓
-7. ⬜ 补充子模块单元测试
+7. ✅ 补充子模块单元测试
          ↓
 8. ⬜ 端到端测试验证
 ```
@@ -252,6 +259,13 @@ src/query/
 | `src/query/__tests__/integration.test.ts` | 集成测试 |
 | `src/query/__tests__/unit/tokenBudget.test.ts` | tokenBudget 单元测试 |
 | `src/query/__tests__/unit/transitions.test.ts` | 类型测试 |
+| `src/query/__tests__/unit/deps.test.ts` | QueryDeps 工厂测试 |
+| `src/query/__tests__/unit/phases/init.test.ts` | 初始化阶段测试 |
+| `src/query/__tests__/unit/phases/preprocess.test.ts` | 预处理阶段测试 |
+| `src/query/__tests__/unit/phases/autocompact.test.ts` | 自动压缩阶段测试 |
+| `src/query/__tests__/unit/phases/streaming.test.ts` | 流式处理阶段测试 |
+| `src/query/__tests__/unit/phases/toolExecution.test.ts` | 工具执行阶段测试 |
+| `src/query/__tests__/unit/phases/recovery.test.ts` | 错误恢复阶段测试 |
 | `src/query/__tests__/mocks/query-deps.ts` | Mock 工厂 |
 | `src/query/types.ts` | Query loop 类型定义 |
 | `src/query/phases/init.ts` | 初始化阶段模块 |
@@ -262,13 +276,17 @@ src/query/
 | `src/query/phases/streaming.ts` | 流式处理阶段模块 |
 | `src/query/phases/recovery.ts` | 错误恢复阶段模块 |
 | `src/query/phases/index.ts` | Phases 导出文件 |
-| `src/query/loop.ts` | queryLoop 函数提取（简化版，待精简） |
+| `src/query/loop.ts` | queryLoop 函数提取 |
+| `src/query/stopHooks.ts` | Stop hooks 处理模块 |
+| `src/query/config.ts` | QueryConfig 构建模块 |
+| `src/query/tokenBudget.ts` | Token 预算逻辑模块 |
+| `src/query/transitions.ts` | Terminal/Continue 类型模块 |
 
 ### 修改文件
 
 | 文件 | 修改内容 |
 |------|----------|
-| `src/query.ts` | 移除 9 个直接导入；在 queryLoop 中从 deps 解构所有函数；在 query 函数中获取 notifyCommandLifecycleFn |
+| `src/query.ts` | 从 2000+ 行精简到 247 行；移除 9 个直接导入；使用 QueryDeps 依赖注入 |
 | `src/query/__tests__/mocks/query-deps.ts` | Mock 工厂（已有完整实现） |
 
 ## 验证命令
@@ -292,4 +310,4 @@ bun run test:all
 
 ---
 
-*最后更新: 2026-05-09（query.ts 已精简）*
+*最后更新: 2026-05-09（P0 核心任务 1-5 全部完成，93 个测试通过）*

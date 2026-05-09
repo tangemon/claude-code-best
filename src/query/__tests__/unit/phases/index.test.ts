@@ -1,7 +1,7 @@
 /**
  * Unit tests for phases/index.ts - re-exports
  */
-import { describe, test, expect } from 'vitest'
+import { describe, test, expect } from 'bun:test'
 import * as phases from '../../../phases/index.js'
 
 describe('phases index exports', () => {

@@ -30,7 +30,7 @@ mock.module('src/utils/debug.ts', debugMock)
 
 // Now import query after mocks are set up
 import { query } from '../../query'
-import type { QueryDeps } from '../../deps'
+import type { QueryDeps } from '../deps'
 import { createMockQueryDeps, BASE_TOOL_USE_CONTEXT } from './mocks/query-deps'
 import {
   createUserMessage,
@@ -39,7 +39,7 @@ import {
 } from '../../utils/messages'
 import { asSystemPrompt } from '../../utils/systemPromptType'
 import type { AssistantMessage, StreamEvent, UserMessage } from '../../types/message'
-import type { Terminal } from '../../transitions'
+import type { Terminal } from '../transitions'
 
 let tempDir = ''
 let originalProcessCwd = ''
@@ -195,7 +195,7 @@ describe('query integration: basic flow', () => {
     })
 
     const generator = query({
-      messages: [createUserMessage('hello')],
+      messages: [createUserMessage({ content: 'hello' })],
       systemPrompt: asSystemPrompt([]),
       userContext: {},
       systemContext: {},
@@ -224,7 +224,7 @@ describe('query integration: basic flow', () => {
     })
 
     const generator = query({
-      messages: [createUserMessage('hello')],
+      messages: [createUserMessage({ content: 'hello' })],
       systemPrompt: asSystemPrompt([]),
       userContext: {},
       systemContext: {},
@@ -249,7 +249,7 @@ describe('query integration: basic flow', () => {
     })
 
     const generator = query({
-      messages: [createUserMessage('hello')],
+      messages: [createUserMessage({ content: 'hello' })],
       systemPrompt: asSystemPrompt([]),
       userContext: {},
       systemContext: {},
@@ -278,7 +278,7 @@ describe('query integration: tool execution', () => {
     })
 
     const generator = query({
-      messages: [createUserMessage('list files')],
+      messages: [createUserMessage({ content: 'list files' })],
       systemPrompt: asSystemPrompt([]),
       userContext: {},
       systemContext: {},
@@ -320,7 +320,7 @@ describe('query integration: tool execution', () => {
     })
 
     const generator = query({
-      messages: [createUserMessage('where am I')],
+      messages: [createUserMessage({ content: 'where am I' })],
       systemPrompt: asSystemPrompt([]),
       userContext: {},
       systemContext: {},
@@ -352,7 +352,7 @@ describe('query integration: error handling', () => {
     })
 
     const generator = query({
-      messages: [createUserMessage('hello')],
+      messages: [createUserMessage({ content: 'hello' })],
       systemPrompt: asSystemPrompt([]),
       userContext: {},
       systemContext: {},
@@ -375,7 +375,7 @@ describe('query integration: error handling', () => {
     })
 
     const generator = query({
-      messages: [createUserMessage('hello')],
+      messages: [createUserMessage({ content: 'hello' })],
       systemPrompt: asSystemPrompt([]),
       userContext: {},
       systemContext: {},
@@ -415,7 +415,7 @@ describe('query integration: abort handling', () => {
     })
 
     const generator = query({
-      messages: [createUserMessage('hello')],
+      messages: [createUserMessage({ content: 'hello' })],
       systemPrompt: asSystemPrompt([]),
       userContext: {},
       systemContext: {},
@@ -449,7 +449,7 @@ describe('query integration: abort handling', () => {
     }
 
     const generator = query({
-      messages: [createUserMessage('hello')],
+      messages: [createUserMessage({ content: 'hello' })],
       systemPrompt: asSystemPrompt([]),
       userContext: {},
       systemContext: {},
@@ -487,7 +487,7 @@ describe('query integration: edge cases', () => {
     })
 
     const generator = query({
-      messages: [createUserMessage('repeat hi')],
+      messages: [createUserMessage({ content: 'repeat hi' })],
       systemPrompt: asSystemPrompt([]),
       userContext: {},
       systemContext: {},
@@ -537,7 +537,7 @@ describe('query integration: edge cases', () => {
     })
 
     const generator = query({
-      messages: [createUserMessage('test')],
+      messages: [createUserMessage({ content: 'test' })],
       systemPrompt: asSystemPrompt([]),
       userContext: {},
       systemContext: {},
@@ -565,7 +565,7 @@ describe('query integration: terminal types', () => {
     })
 
     const generator = query({
-      messages: [createUserMessage('hello')],
+      messages: [createUserMessage({ content: 'hello' })],
       systemPrompt: asSystemPrompt([]),
       userContext: {},
       systemContext: {},
@@ -597,7 +597,7 @@ describe('query integration: terminal types', () => {
     })
 
     const generator = query({
-      messages: [createUserMessage('test')],
+      messages: [createUserMessage({ content: 'test' })],
       systemPrompt: asSystemPrompt([]),
       userContext: {},
       systemContext: {},

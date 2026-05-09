@@ -1,7 +1,7 @@
 /**
  * Unit tests for phases/attachments.ts
  */
-import { describe, test, expect, vi } from 'vitest'
+import { describe, test, expect } from 'bun:test'
 import { processAttachments } from '../../../phases/attachments.js'
 import type { AttachmentsInput, AttachmentsContext } from '../../../phases/attachments.js'
 import type { QueryDeps } from '../../../deps.js'
@@ -10,7 +10,7 @@ describe('processAttachments', () => {
   const createMockDeps = (): QueryDeps => ({
     callModel: async function* () {},
     microcompact: async (messages) => ({ messages }),
-    autocompact: async () => ({ compactionResult: undefined, consecutiveFailures: 0 }),
+    autocompact: async () => ({ wasCompacted: false, compactionResult: undefined, consecutiveFailures: 0 }),
     uuid: () => 'test-uuid',
     runTools: async function* () {},
     generateToolUseSummary: async () => null,
@@ -42,14 +42,14 @@ describe('processAttachments', () => {
       mcpClients: [],
       mcpResources: {},
       isNonInteractiveSession: true,
-      agentDefinitions: { activeAgents: [], allowedAgentTypes: [] },
+      agentDefinitions: { activeAgents: [], allAgents: [], allowedAgentTypes: [] },
     },
     abortController: new AbortController(),
     readFileState: new Map(),
     getAppState: () => ({
       toolPermissionContext: { mode: 'bypass' as const, toolPermissions: new Map() },
       fastMode: false,
-      mcp: { tools: [], clients: [] },
+      mcp: { tools: [], clients: [], commands: [], resources: {}, pluginReconnectKey: 0 },
       effortValue: undefined,
       advisorModel: undefined,
       sessionHooks: new Map(),

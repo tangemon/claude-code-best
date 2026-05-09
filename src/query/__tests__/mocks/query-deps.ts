@@ -4,22 +4,25 @@
  * Provides sensible defaults for testing query() without mocking
  * individual modules. Override specific deps with partial overrides.
  */
-import type { QueryDeps, StopHookResult } from '../deps.js'
+import type { QueryDeps, StopHookResult } from '../../deps'
+import type { Message } from '../../../types/message.js'
+import type { ToolUseContext } from '../../../Tool.js'
 
 export function createMockQueryDeps(overrides?: Partial<QueryDeps>): QueryDeps {
   return {
     callModel: async function* () {},
-    microcompact: async (messages) => ({ messages }),
+    microcompact: async (messages: Message[]) => ({ messages }),
     autocompact: async () => ({
+      wasCompacted: false,
       compactionResult: undefined,
       consecutiveFailures: 0,
     }),
     uuid: () => crypto.randomUUID(),
     runTools: async function* () {},
     generateToolUseSummary: async () => null,
-    applyToolResultBudget: async (messages) => messages,
-    prependUserContext: (messages) => messages,
-    appendSystemContext: (systemPrompt) => systemPrompt,
+    applyToolResultBudget: async (messages: Message[]) => messages,
+    prependUserContext: (messages: Message[]) => messages,
+    appendSystemContext: (systemPrompt: any) => systemPrompt,
     createDumpPromptsFetch: () => undefined,
     notifyCommandLifecycle: () => {},
     headlessProfilerCheckpoint: () => {},
@@ -43,7 +46,7 @@ export function createMockQueryDeps(overrides?: Partial<QueryDeps>): QueryDeps {
 /**
  * Common test fixtures
  */
-export const BASE_TOOL_USE_CONTEXT = {
+export const BASE_TOOL_USE_CONTEXT: ToolUseContext = {
   options: {
     commands: [],
     debug: false,
@@ -56,18 +59,19 @@ export const BASE_TOOL_USE_CONTEXT = {
     isNonInteractiveSession: true,
     agentDefinitions: {
       activeAgents: [],
+      allAgents: [],
       allowedAgentTypes: [],
     },
   },
   abortController: new AbortController(),
-  readFileState: new Map(),
+  readFileState: new Map() as any,
   getAppState: () => ({
     toolPermissionContext: {
       mode: 'bypass' as const,
       toolPermissions: new Map(),
     },
     fastMode: false,
-    mcp: { tools: [], clients: [] },
+    mcp: { tools: [], clients: [], commands: [], resources: {}, pluginReconnectKey: 0 },
     effortValue: undefined,
     advisorModel: undefined,
     sessionHooks: new Map(),

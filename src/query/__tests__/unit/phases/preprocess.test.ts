@@ -1,7 +1,7 @@
 /**
  * Unit tests for phases/preprocess.ts
  */
-import { describe, test, expect, vi } from 'vitest'
+import { describe, test, expect } from 'bun:test'
 import { preprocessMessages } from '../../../phases/preprocess.js'
 import type { Message } from '../../../../types/message.js'
 import type { QueryDeps } from '../../../deps.js'
@@ -9,14 +9,14 @@ import type { QueryDeps } from '../../../deps.js'
 describe('preprocessMessages', () => {
   const createMockDeps = (): QueryDeps => ({
     callModel: async function* () {},
-    microcompact: async (messages) => ({ messages }),
-    autocompact: async () => ({ compactionResult: undefined, consecutiveFailures: 0 }),
+    microcompact: async (messages: Message[]) => ({ messages }),
+    autocompact: async () => ({ wasCompacted: false, compactionResult: undefined, consecutiveFailures: 0 }),
     uuid: () => 'test-uuid',
     runTools: async function* () {},
     generateToolUseSummary: async () => null,
-    applyToolResultBudget: async (messages) => messages,
-    prependUserContext: (messages) => messages,
-    appendSystemContext: (systemPrompt) => ({ system: [] }),
+    applyToolResultBudget: async (messages: Message[]) => messages,
+    prependUserContext: (messages: Message[]) => messages,
+    appendSystemContext: (systemPrompt: any) => systemPrompt,
     createDumpPromptsFetch: () => undefined,
     notifyCommandLifecycle: () => {},
     headlessProfilerCheckpoint: () => {},
@@ -42,7 +42,7 @@ describe('preprocessMessages', () => {
       mcpClients: [],
       mcpResources: {},
       isNonInteractiveSession: true,
-      agentDefinitions: { activeAgents: [], allowedAgentTypes: [] },
+      agentDefinitions: { activeAgents: [], allAgents: [], allowedAgentTypes: [] },
     },
     abortController: new AbortController(),
     readFileState: new Map(),
@@ -89,14 +89,18 @@ describe('preprocessMessages', () => {
   })
 
   test('applies tool result budget via deps', async () => {
-    const applyToolResultBudgetMock = vi.fn((messages) => messages)
+    let called = false
+    const applyToolResultBudgetMock = async (messages: Message[]) => {
+      called = true
+      return messages
+    }
     const deps = createMockDeps()
     deps.applyToolResultBudget = applyToolResultBudgetMock
     const toolUseContext = createMockToolUseContext()
 
     await preprocessMessages([], toolUseContext, undefined, 'sdk', deps)
 
-    expect(applyToolResultBudgetMock).toHaveBeenCalled()
+    expect(called).toBe(true)
   })
 
   test('returns messagesForQuery from getMessagesAfterCompactBoundary', async () => {

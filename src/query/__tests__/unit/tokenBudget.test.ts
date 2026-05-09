@@ -38,28 +38,36 @@ describe('tokenBudget', () => {
       const tracker = createBudgetTracker()
       const decision = checkTokenBudget(tracker, 'agent-123', 100000, 50000)
       expect(decision.action).toBe('stop')
-      expect(decision.completionEvent).toBeNull()
+      if (decision.action === 'stop') {
+        expect(decision.completionEvent).toBeNull()
+      }
     })
 
     test('returns stop when budget is null', () => {
       const tracker = createBudgetTracker()
       const decision = checkTokenBudget(tracker, undefined, null, 50000)
       expect(decision.action).toBe('stop')
-      expect(decision.completionEvent).toBeNull()
+      if (decision.action === 'stop') {
+        expect(decision.completionEvent).toBeNull()
+      }
     })
 
     test('returns stop when budget is zero', () => {
       const tracker = createBudgetTracker()
       const decision = checkTokenBudget(tracker, undefined, 0, 50000)
       expect(decision.action).toBe('stop')
-      expect(decision.completionEvent).toBeNull()
+      if (decision.action === 'stop') {
+        expect(decision.completionEvent).toBeNull()
+      }
     })
 
     test('returns stop when budget is negative', () => {
       const tracker = createBudgetTracker()
       const decision = checkTokenBudget(tracker, undefined, -100, 50000)
       expect(decision.action).toBe('stop')
-      expect(decision.completionEvent).toBeNull()
+      if (decision.action === 'stop') {
+        expect(decision.completionEvent).toBeNull()
+      }
     })
 
     test('returns continue when under 90% threshold', () => {
@@ -70,10 +78,12 @@ describe('tokenBudget', () => {
       const decision = checkTokenBudget(tracker, undefined, budget, turnTokens)
 
       expect(decision.action).toBe('continue')
-      expect(decision.pct).toBe(50)
-      expect(decision.turnTokens).toBe(turnTokens)
-      expect(decision.budget).toBe(budget)
-      expect(decision.continuationCount).toBe(1)
+      if (decision.action === 'continue') {
+        expect(decision.pct).toBe(50)
+        expect(decision.turnTokens).toBe(turnTokens)
+        expect(decision.budget).toBe(budget)
+        expect(decision.continuationCount).toBe(1)
+      }
     })
 
     test('increments continuation count on multiple continues', () => {
@@ -102,7 +112,9 @@ describe('tokenBudget', () => {
       const decision = checkTokenBudget(tracker, undefined, budget, turnTokens)
 
       expect(decision.action).toBe('stop')
-      expect(decision.completionEvent).toBeNull() // No prior continuation, so no completion event
+      if (decision.action === 'stop') {
+        expect(decision.completionEvent).toBeNull() // No prior continuation, so no completion event
+      }
     })
 
     test('returns stop with completionEvent when at threshold after continuations', () => {
