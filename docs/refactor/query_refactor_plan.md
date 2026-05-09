@@ -157,12 +157,12 @@ src/query/
 ├── tokenBudget.ts        # Token 预算逻辑（已独立）
 ├── transitions.ts        # Terminal/Continue 类型（已独立）
 │
-├── phases/               # 循环阶段子模块（进行中）
+├── phases/               # 循环阶段子模块（已完成）
 │   ├── init.ts           # 初始化阶段 ✅
 │   ├── preprocess.ts     # 上下文预处理 ✅
 │   ├── autocompact.ts    # 自动压缩 ✅
-│   ├── streaming.ts      # API 流式处理（待实现）
-│   ├── recovery.ts       # 错误恢复（待实现）
+│   ├── streaming.ts      # API 流式处理 ✅
+│   ├── recovery.ts       # 错误恢复 ✅
 │   ├── toolExecution.ts  # 工具执行 ✅
 │   └── attachments.ts    # 附件处理 ✅
 │
@@ -176,6 +176,8 @@ src/query/
 - `init.ts` — 初始化 query loop 状态和上下文
 - `preprocess.ts` — 消息预处理、预算执行
 - `autocompact.ts` — 自动压缩逻辑
+- `streaming.ts` — API 流式处理和工具块收集
+- `recovery.ts` — 错误恢复（prompt-too-long、max_output_tokens）
 - `toolExecution.ts` — 工具执行和摘要生成
 - `attachments.ts` — 队列命令和附件处理
 
@@ -220,7 +222,7 @@ src/query/
          ↓
 3. ✅ 替换 query.ts 中剩余直接导入
          ↓
-4. 🔄 提取 phases/ 子模块（5/7 完成）
+4. ✅ 提取 phases/ 子模块（7/7 完成）
          ↓
 5. ⬜ 提取 loop.ts
          ↓
@@ -257,6 +259,8 @@ src/query/
 | `src/query/phases/autocompact.ts` | 自动压缩阶段模块 |
 | `src/query/phases/toolExecution.ts` | 工具执行阶段模块 |
 | `src/query/phases/attachments.ts` | 附件处理阶段模块 |
+| `src/query/phases/streaming.ts` | 流式处理阶段模块 |
+| `src/query/phases/recovery.ts` | 错误恢复阶段模块 |
 | `src/query/phases/index.ts` | Phases 导出文件 |
 
 ### 修改文件
@@ -287,4 +291,4 @@ bun run test:all
 
 ---
 
-*最后更新: 2026-05-09（模块拆分进行中）*
+*最后更新: 2026-05-09（phases 模块全部完成）*
