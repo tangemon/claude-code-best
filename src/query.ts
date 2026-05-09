@@ -56,8 +56,6 @@ import {
   createMicrocompactBoundaryMessage,
   stripSignatureBlocks,
 } from './utils/messages.js'
-import { generateToolUseSummary } from './services/toolUseSummary/toolUseSummaryGenerator.js'
-import { prependUserContext, appendSystemContext } from './utils/api.js'
 import {
   createAttachmentMessage,
   filterDuplicateMemoryAttachments,
@@ -83,8 +81,6 @@ import {
   claimConsumableQueuedAutonomyCommands,
   finalizeAutonomyCommandsForTurn,
 } from './utils/autonomyQueueLifecycle.js'
-import { notifyCommandLifecycle } from './utils/commandLifecycle.js'
-import { headlessProfilerCheckpoint } from './utils/headlessProfiler.js'
 import {
   getRuntimeMainLoopModel,
   renderModelName,
@@ -101,12 +97,8 @@ import { executePostSamplingHooks } from './utils/hooks/postSamplingHooks.js'
 import { executeStopFailureHooks } from './utils/hooks.js'
 import type { QuerySource } from './constants/querySource.js'
 import type { QueuedCommand } from './types/textInputTypes.js'
-import { createDumpPromptsFetch } from './services/api/dumpPrompts.js'
 import { StreamingToolExecutor } from './services/tools/StreamingToolExecutor.js'
-import { queryCheckpoint } from './utils/queryProfiler.js'
 import { runTools } from './services/tools/toolOrchestration.js'
-import { applyToolResultBudget } from './utils/toolResultStorage.js'
-import { recordContentReplacement } from './utils/sessionStorage.js'
 import { handleStopHooks } from './query/stopHooks.js'
 import { buildQueryConfig } from './query/config.js'
 import { productionDeps, type QueryDeps } from './query/deps.js'
@@ -278,7 +270,7 @@ export async function* query(
   const consumedAutonomyCommands: QueuedCommand[] = []
 
   // Get deps for query-level functions
-  const { logError: logErrorFn } = params.deps ?? productionDeps()
+  const { logError: logErrorFn, notifyCommandLifecycle: notifyCommandLifecycleFn } = params.deps ?? productionDeps()
 
   // Create Langfuse trace for this query turn (no-op if not configured).
   // When called as a sub-agent, langfuseTrace is already set by runAgent()
@@ -379,7 +371,7 @@ export async function* query(
   // both generators). This gives the same asymmetric started-without-completed
   // signal as print.ts's drainCommandQueue when the turn fails.
   for (const uuid of consumedCommandUuids) {
-    notifyCommandLifecycle(uuid, 'completed')
+    notifyCommandLifecycleFn(uuid, 'completed')
   }
   return terminal!
 }
@@ -412,6 +404,15 @@ async function* queryLoop(
   // Destructure deps for convenience
   const {
     runTools: runToolsFn,
+    generateToolUseSummary: generateToolUseSummaryFn,
+    applyToolResultBudget: applyToolResultBudgetFn,
+    prependUserContext: prependUserContextFn,
+    appendSystemContext: appendSystemContextFn,
+    createDumpPromptsFetch: createDumpPromptsFetchFn,
+    notifyCommandLifecycle: notifyCommandLifecycleFn,
+    headlessProfilerCheckpoint: headlessProfilerCheckpointFn,
+    queryCheckpoint: queryCheckpointFn,
+    recordContentReplacement: recordContentReplacementFn,
     handleStopHooks: handleStopHooksFn,
     executeStopFailureHooks: executeStopFailureHooksFn,
     executePostSamplingHooks: executePostSamplingHooksFn,
@@ -493,11 +494,11 @@ async function* queryLoop(
 
     yield { type: 'stream_request_start' }
 
-    queryCheckpoint('query_fn_entry')
+    queryCheckpointFn('query_fn_entry')
 
     // Record query start for headless latency tracking (skip for subagents)
     if (!toolUseContext.agentId) {
-      headlessProfilerCheckpoint('query_started')
+      headlessProfilerCheckpointFn('query_started')
     }
 
     // Initialize or increment query chain tracking
@@ -549,12 +550,12 @@ async function* queryLoop(
     const persistReplacements =
       querySource.startsWith('agent:') ||
       querySource.startsWith('repl_main_thread')
-    messagesForQuery = await applyToolResultBudget(
+    messagesForQuery = await applyToolResultBudgetFn(
       messagesForQuery,
       toolUseContext.contentReplacementState,
       persistReplacements
         ? records =>
-            void recordContentReplacement(
+            void recordContentReplacementFn(
               records,
               toolUseContext.agentId,
             ).catch(logErrorFn)
@@ -572,18 +573,18 @@ async function* queryLoop(
     // from the protected-tail assistant, which survives snip unchanged).
     let snipTokensFreed = 0
     if (feature('HISTORY_SNIP')) {
-      queryCheckpoint('query_snip_start')
+      queryCheckpointFn('query_snip_start')
       const snipResult = snipModule!.snipCompactIfNeeded(messagesForQuery)
       messagesForQuery = snipResult.messages
       snipTokensFreed = snipResult.tokensFreed
       if (snipResult.boundaryMessage) {
         yield snipResult.boundaryMessage
       }
-      queryCheckpoint('query_snip_end')
+      queryCheckpointFn('query_snip_end')
     }
 
     // Apply microcompact before autocompact
-    queryCheckpoint('query_microcompact_start')
+    queryCheckpointFn('query_microcompact_start')
     const microcompactResult = await deps.microcompact(
       messagesForQuery,
       toolUseContext,
@@ -606,7 +607,7 @@ async function* queryLoop(
     const pendingCacheEdits = feature('CACHED_MICROCOMPACT')
       ? microcompactResult.compactionInfo?.pendingCacheEdits
       : undefined
-    queryCheckpoint('query_microcompact_end')
+    queryCheckpointFn('query_microcompact_end')
 
     // Project the collapsed context view and maybe commit more collapses.
     // Runs BEFORE autocompact so that if collapse gets us under the
@@ -630,10 +631,10 @@ async function* queryLoop(
     }
 
     const fullSystemPrompt = asSystemPrompt(
-      appendSystemContext(systemPrompt, systemContext),
+      appendSystemContextFn(systemPrompt, systemContext),
     )
 
-    queryCheckpoint('query_autocompact_start')
+    queryCheckpointFn('query_autocompact_start')
     const { compactionResult, consecutiveFailures } = await deps.autocompact(
       messagesForQuery,
       toolUseContext,
@@ -648,7 +649,7 @@ async function* queryLoop(
       tracking,
       snipTokensFreed,
     )
-    queryCheckpoint('query_autocompact_end')
+    queryCheckpointFn('query_autocompact_end')
 
     if (compactionResult) {
       const {
@@ -740,7 +741,7 @@ async function* queryLoop(
     const toolUseBlocks: ToolUseBlock[] = []
     let needsFollowUp = false
 
-    queryCheckpoint('query_setup_start')
+    queryCheckpointFn('query_setup_start')
     const useStreamingToolExecution = config.gates.streamingToolExecution
     let streamingToolExecutor = useStreamingToolExecution
       ? new StreamingToolExecutor(
@@ -760,7 +761,7 @@ async function* queryLoop(
         doesMostRecentAssistantMessageExceed200k(messagesForQuery),
     })
 
-    queryCheckpoint('query_setup_end')
+    queryCheckpointFn('query_setup_end')
 
     // Create fetch wrapper once per query session to avoid memory retention.
     // Each call to createDumpPromptsFetch creates a closure that captures the request body.
@@ -769,7 +770,7 @@ async function* queryLoop(
     // Note: agentId is effectively constant during a query() call - it only changes
     // between queries (e.g., /clear command or session resume).
     const dumpPromptsFetch = config.gates.isAnt
-      ? createDumpPromptsFetch(toolUseContext.agentId ?? config.sessionId)
+      ? createDumpPromptsFetchFn(toolUseContext.agentId ?? config.sessionId)
       : undefined
 
     // Block if we've hit the hard blocking limit (only applies when auto-compact is OFF)
@@ -874,15 +875,15 @@ async function* queryLoop(
 
     let attemptWithFallback = true
 
-    queryCheckpoint('query_api_loop_start')
+    queryCheckpointFn('query_api_loop_start')
     try {
       while (attemptWithFallback) {
         attemptWithFallback = false
         try {
           let streamingFallbackOccured = false
-          queryCheckpoint('query_api_streaming_start')
+          queryCheckpointFn('query_api_streaming_start')
           for await (const message of deps.callModel({
-            messages: prependUserContext(messagesForQuery, userContext),
+            messages: prependUserContextFn(messagesForQuery, userContext),
             systemPrompt: fullSystemPrompt,
             thinkingConfig: toolUseContext.options.thinkingConfig,
             tools: toolUseContext.options.tools,
@@ -1104,7 +1105,7 @@ async function* queryLoop(
               }
             }
           }
-          queryCheckpoint('query_api_streaming_end')
+          queryCheckpointFn('query_api_streaming_end')
 
           // Yield deferred microcompact boundary message using actual API-reported
           // token deletion count instead of client-side estimates.
@@ -1609,7 +1610,7 @@ async function* queryLoop(
     let shouldPreventContinuation = false
     let updatedToolUseContext = toolUseContext
 
-    queryCheckpoint('query_tool_execution_start')
+    queryCheckpointFn('query_tool_execution_start')
 
     if (streamingToolExecutor) {
       logEventFn('tengu_streaming_tool_execution_used', {
@@ -1654,7 +1655,7 @@ async function* queryLoop(
         }
       }
     }
-    queryCheckpoint('query_tool_execution_end')
+    queryCheckpointFn('query_tool_execution_end')
 
     // Generate tool use summary after tool batch completes — passed to next recursive call
     let nextPendingToolUseSummary:
@@ -1719,7 +1720,7 @@ async function* queryLoop(
       })
 
       // Fire off summary generation without blocking the next API call
-      nextPendingToolUseSummary = generateToolUseSummary({
+      nextPendingToolUseSummary = generateToolUseSummaryFn({
         tools: toolInfoForSummary,
         signal: toolUseContext.abortController.signal,
         isNonInteractiveSession: toolUseContext.options.isNonInteractiveSession,
@@ -1844,7 +1845,7 @@ async function* queryLoop(
       for (const cmd of claimedConsumedCommands) {
         if (cmd.uuid) {
           consumedCommandUuids.push(cmd.uuid)
-          notifyCommandLifecycle(cmd.uuid, 'started')
+          notifyCommandLifecycleFn(cmd.uuid, 'started')
         }
       }
       removeFromQueue(claimedConsumedCommands)
@@ -1911,7 +1912,7 @@ async function* queryLoop(
       for (const cmd of consumedCommands) {
         if (cmd.uuid) {
           consumedCommandUuids.push(cmd.uuid)
-          notifyCommandLifecycle(cmd.uuid, 'started')
+          notifyCommandLifecycleFn(cmd.uuid, 'started')
         }
       }
       removeFromQueue(consumedCommands)
@@ -1985,7 +1986,7 @@ async function* queryLoop(
       return { reason: 'max_turns', turnCount: nextTurnCount }
     }
 
-    queryCheckpoint('query_recursive_call')
+    queryCheckpointFn('query_recursive_call')
     const next: State = {
       messages: messagesForQuery.concat(assistantMessages, toolResults),
       toolUseContext: toolUseContextWithQueryTracking,
