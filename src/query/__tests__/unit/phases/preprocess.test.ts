@@ -48,7 +48,14 @@ describe('preprocessMessages', () => {
     readFileState: new Map(),
     contentReplacementState: undefined,
     getAppState: () => ({
-      toolPermissionContext: { mode: 'bypass' as const, toolPermissions: new Map() },
+      toolPermissionContext: {
+        mode: 'bypassPermissions' as const,
+        additionalWorkingDirectories: new Map(),
+        alwaysAllowRules: {},
+        alwaysDenyRules: {},
+        alwaysAskRules: {},
+        isBypassPermissionsModeAvailable: true,
+      },
       fastMode: false,
       mcp: { tools: [], clients: [] },
       effortValue: undefined,
@@ -64,18 +71,18 @@ describe('preprocessMessages', () => {
   })
 
   test('clears toolUseResult from previous turns', async () => {
-    const messages: (Message & { toolUseResult?: string })[] = [
+    const messages = [
       {
         type: 'user',
         id: '1',
         message: { role: 'user', content: [] },
         timestamp: Date.now(),
         toolUseResult: 'some result',
-      } as Message & { toolUseResult?: string },
+      } as unknown as Message & { toolUseResult?: string },
     ]
 
     const deps = createMockDeps()
-    const toolUseContext = createMockToolUseContext()
+    const toolUseContext = createMockToolUseContext() as any
 
     const result = await preprocessMessages(
       messages,
@@ -96,7 +103,7 @@ describe('preprocessMessages', () => {
     }
     const deps = createMockDeps()
     deps.applyToolResultBudget = applyToolResultBudgetMock
-    const toolUseContext = createMockToolUseContext()
+    const toolUseContext = createMockToolUseContext() as any
 
     await preprocessMessages([], toolUseContext, undefined, 'sdk', deps)
 
@@ -105,7 +112,7 @@ describe('preprocessMessages', () => {
 
   test('returns messagesForQuery from getMessagesAfterCompactBoundary', async () => {
     const deps = createMockDeps()
-    const toolUseContext = createMockToolUseContext()
+    const toolUseContext = createMockToolUseContext() as any
 
     const result = await preprocessMessages([], toolUseContext, undefined, 'sdk', deps)
 
@@ -114,7 +121,7 @@ describe('preprocessMessages', () => {
 
   test('returns tracking unchanged when not provided', async () => {
     const deps = createMockDeps()
-    const toolUseContext = createMockToolUseContext()
+    const toolUseContext = createMockToolUseContext() as any
 
     const result = await preprocessMessages([], toolUseContext, undefined, 'sdk', deps)
 
@@ -123,7 +130,7 @@ describe('preprocessMessages', () => {
 
   test('returns snipTokensFreed as 0', async () => {
     const deps = createMockDeps()
-    const toolUseContext = createMockToolUseContext()
+    const toolUseContext = createMockToolUseContext() as any
 
     const result = await preprocessMessages([], toolUseContext, undefined, 'sdk', deps)
 
@@ -132,7 +139,7 @@ describe('preprocessMessages', () => {
 
   test('preserves toolUseContext reference', async () => {
     const deps = createMockDeps()
-    const toolUseContext = createMockToolUseContext()
+    const toolUseContext = createMockToolUseContext() as any
 
     const result = await preprocessMessages([], toolUseContext, undefined, 'sdk', deps)
 

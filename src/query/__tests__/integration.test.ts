@@ -293,7 +293,7 @@ describe('query integration: tool execution', () => {
     const toolUseEvents = events.filter(
       e => (e as { type?: string }).type === 'assistant' &&
            Array.isArray((e as AssistantMessage).message?.content) &&
-           (e as AssistantMessage).message.content.some((c: { type: string }) => c.type === 'tool_use'),
+           ((e as AssistantMessage).message.content as Array<{ type: string }>).some(c => c.type === 'tool_use'),
     )
     expect(toolUseEvents.length).toBeGreaterThan(0)
   })
@@ -314,8 +314,10 @@ describe('query integration: tool execution', () => {
         turnCount++
       },
       runTools: async function* () {
-        const toolUseId = (toolUseMsg.message.content[0] as { id: string }).id
-        yield { message: createToolResultMessage(toolUseId, '/home/user') }
+        const content = toolUseMsg.message.content
+        if (!Array.isArray(content)) return
+        const toolUseId = (content[0] as { id: string }).id
+        yield { message: createToolResultMessage(toolUseId, '/home/user'), newContext: toolUseMsg } as any
       },
     })
 
@@ -346,7 +348,7 @@ describe('query integration: error handling', () => {
         yield { type: 'stream_request_start' }
         yield createAssistantAPIErrorMessage({
           content: 'API Error: server unavailable',
-          error: new Error('server unavailable'),
+          error: 'server_error',
         })
       },
     })
@@ -481,8 +483,10 @@ describe('query integration: edge cases', () => {
         callCount++
       },
       runTools: async function* () {
-        const toolUseId = (toolUseMsg.message.content[0] as { id: string }).id
-        yield { message: createToolResultMessage(toolUseId, 'hi') }
+        const content = toolUseMsg.message.content
+        if (!Array.isArray(content)) return
+        const toolUseId = (content[0] as { id: string }).id
+        yield { message: createToolResultMessage(toolUseId, 'hi'), newContext: toolUseMsg } as any
       },
     })
 
@@ -591,8 +595,10 @@ describe('query integration: terminal types', () => {
         turnCount++
       },
       runTools: async function* () {
-        const toolUseId = (toolUseMsg.message.content[0] as { id: string }).id
-        yield { message: createToolResultMessage(toolUseId, 'result') }
+        const content = toolUseMsg.message.content
+        if (!Array.isArray(content)) return
+        const toolUseId = (content[0] as { id: string }).id
+        yield { message: createToolResultMessage(toolUseId, 'result'), newContext: toolUseMsg } as any
       },
     })
 

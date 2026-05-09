@@ -1,11 +1,24 @@
 /**
  * Unit tests for phases/recovery.ts
  */
-import { describe, test, expect, vi } from 'vitest'
+import { describe, test, expect } from 'bun:test'
 import { checkWithheldErrors, attemptMaxTokensRecovery } from '../../../phases/recovery.js'
 import type { RecoveryInput, RecoveryContext } from '../../../phases/recovery.js'
 import type { QueryDeps } from '../../../deps.js'
 import type { AssistantMessage } from '../../../../types/message.js'
+
+const createMockState = () => ({
+  turnCount: 1,
+  maxOutputTokensRecoveryCount: 0,
+  messages: [] as any[],
+  toolUseContext: {} as any,
+  autoCompactTracking: undefined as any,
+  hasAttemptedReactiveCompact: false,
+  pendingToolUseSummary: undefined,
+  maxOutputTokensOverride: undefined as number | undefined,
+  stopHookActive: undefined,
+  transition: undefined,
+})
 
 describe('checkWithheldErrors', () => {
   const createMockContext = (): RecoveryContext => ({
@@ -15,12 +28,12 @@ describe('checkWithheldErrors', () => {
   })
 
   test('returns isWithheld413 false for non-error message', () => {
-    const lastMessage: AssistantMessage = {
+    const lastMessage = {
       type: 'assistant',
       id: 'test',
       message: { role: 'assistant', content: [] },
       timestamp: Date.now(),
-    } as AssistantMessage
+    } as unknown as AssistantMessage
 
     const input: RecoveryInput = {
       messagesForQuery: [],
@@ -35,7 +48,7 @@ describe('checkWithheldErrors', () => {
       turnCount: 1,
       taskBudgetRemaining: undefined,
       taskBudget: undefined,
-      state: { turnCount: 1, maxOutputTokensRecoveryCount: 0 },
+      state: createMockState(),
     }
 
     const context = createMockContext()
@@ -45,12 +58,12 @@ describe('checkWithheldErrors', () => {
   })
 
   test('returns isWithheldMedia based on context', () => {
-    const lastMessage: AssistantMessage = {
+    const lastMessage = {
       type: 'assistant',
       id: 'test',
       message: { role: 'assistant', content: [] },
       timestamp: Date.now(),
-    } as AssistantMessage
+    } as unknown as AssistantMessage
 
     const input: RecoveryInput = {
       messagesForQuery: [],
@@ -65,7 +78,7 @@ describe('checkWithheldErrors', () => {
       turnCount: 1,
       taskBudgetRemaining: undefined,
       taskBudget: undefined,
-      state: { turnCount: 1, maxOutputTokensRecoveryCount: 0 },
+      state: createMockState(),
     }
 
     const contextDisabled = createMockContext()
@@ -93,7 +106,7 @@ describe('checkWithheldErrors', () => {
       turnCount: 1,
       taskBudgetRemaining: undefined,
       taskBudget: undefined,
-      state: { turnCount: 1, maxOutputTokensRecoveryCount: 0 },
+      state: createMockState(),
     }
 
     const context = createMockContext()
@@ -123,7 +136,7 @@ describe('attemptMaxTokensRecovery', () => {
     turnCount: 1,
     taskBudgetRemaining: undefined,
     taskBudget: undefined,
-    state: { turnCount: 1, maxOutputTokensRecoveryCount: 0 },
+    state: createMockState(),
   })
 
   test('returns type none when lastMessage is undefined', () => {
@@ -136,12 +149,12 @@ describe('attemptMaxTokensRecovery', () => {
   })
 
   test('returns type none for non-max-tokens error message', () => {
-    const lastMessage: AssistantMessage = {
+    const lastMessage = {
       type: 'assistant',
       id: 'test',
       message: { role: 'assistant', content: [] },
       timestamp: Date.now(),
-    } as AssistantMessage
+    } as unknown as AssistantMessage
 
     const input = createInput()
     const context = createMockContext()
@@ -152,13 +165,13 @@ describe('attemptMaxTokensRecovery', () => {
   })
 
   test('returns type continue when maxOutputTokensRecoveryCount is less than 3', () => {
-    const lastMessage: AssistantMessage = {
+    const lastMessage = {
       type: 'assistant',
       id: 'test',
       message: { role: 'assistant', content: [] },
       timestamp: Date.now(),
       apiError: 'max_output_tokens',
-    } as AssistantMessage
+    } as unknown as AssistantMessage
 
     const input = createInput()
     input.maxOutputTokensRecoveryCount = 1

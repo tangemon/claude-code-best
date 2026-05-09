@@ -1,7 +1,7 @@
 /**
  * Unit tests for phases/toolExecution.ts
  */
-import { describe, test, expect, vi } from 'vitest'
+import { describe, test, expect } from 'bun:test'
 import { executeTools } from '../../../phases/toolExecution.js'
 import type { ToolExecutionInput } from '../../../phases/toolExecution.js'
 import type { QueryDeps } from '../../../deps.js'
@@ -10,13 +10,13 @@ describe('executeTools', () => {
   const createMockDeps = (): QueryDeps => ({
     callModel: async function* () {},
     microcompact: async (messages) => ({ messages }),
-    autocompact: async () => ({ compactionResult: undefined, consecutiveFailures: 0 }),
+    autocompact: async () => ({ wasCompacted: false, compactionResult: undefined, consecutiveFailures: 0 }),
     uuid: () => 'test-uuid',
     runTools: async function* () {},
     generateToolUseSummary: async () => null,
     applyToolResultBudget: async (messages) => messages,
     prependUserContext: (messages) => messages,
-    appendSystemContext: (systemPrompt) => ({ system: [] }),
+    appendSystemContext: (systemPrompt: any) => systemPrompt as any,
     createDumpPromptsFetch: () => undefined,
     notifyCommandLifecycle: () => {},
     headlessProfilerCheckpoint: () => {},
@@ -42,12 +42,19 @@ describe('executeTools', () => {
       mcpClients: [],
       mcpResources: {},
       isNonInteractiveSession: true,
-      agentDefinitions: { activeAgents: [], allowedAgentTypes: [] },
+      agentDefinitions: { activeAgents: [], allAgents: [], allowedAgentTypes: [] },
     },
     abortController: new AbortController(),
     readFileState: new Map(),
     getAppState: () => ({
-      toolPermissionContext: { mode: 'bypass' as const, toolPermissions: new Map() },
+      toolPermissionContext: {
+        mode: 'bypassPermissions' as const,
+        additionalWorkingDirectories: new Map(),
+        alwaysAllowRules: {},
+        alwaysDenyRules: {},
+        alwaysAskRules: {},
+        isBypassPermissionsModeAvailable: true,
+      },
       fastMode: false,
       mcp: { tools: [], clients: [] },
       effortValue: undefined,
@@ -66,7 +73,7 @@ describe('executeTools', () => {
     toolUseBlocks: [],
     assistantMessages: [],
     canUseTool: async () => ({ behavior: 'allow' as const, updatedInput: undefined }),
-    toolUseContext: createMockToolUseContext(),
+    toolUseContext: createMockToolUseContext() as any,
     config: { emitToolUseSummaries: false },
   })
 
