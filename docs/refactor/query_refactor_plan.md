@@ -224,7 +224,7 @@ src/query/
          ↓
 4. ✅ 提取 phases/ 子模块（7/7 完成）
          ↓
-5. ⬜ 提取 loop.ts
+5. ✅ 提取 loop.ts
          ↓
 6. ⬜ 精简 query.ts 主入口
          ↓
@@ -262,6 +262,7 @@ src/query/
 | `src/query/phases/streaming.ts` | 流式处理阶段模块 |
 | `src/query/phases/recovery.ts` | 错误恢复阶段模块 |
 | `src/query/phases/index.ts` | Phases 导出文件 |
+| `src/query/loop.ts` | queryLoop 函数提取（简化版，待精简） |
 
 ### 修改文件
 
@@ -291,4 +292,4 @@ bun run test:all
 
 ---
 
-*最后更新: 2026-05-09（phases 模块全部完成）*
+*最后更新: 2026-05-09（loop.ts 已提取）*
